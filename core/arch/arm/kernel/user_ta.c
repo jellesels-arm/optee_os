@@ -130,9 +130,9 @@ static TEE_Result user_ta_enter(TEE_ErrorOrigin *err,
 	TEE_Result res = TEE_SUCCESS;
 	struct utee_params *usr_params = NULL;
 	uaddr_t usr_stack = 0;
-	struct user_ta_ctx *utc = to_user_ta_ctx(session->ctx);
+	struct user_ta_ctx *utc = to_user_ta_ctx(session->ts_sess.ctx);
 	TEE_ErrorOrigin serr = TEE_ORIGIN_TEE;
-	struct tee_ta_session *s __maybe_unused = NULL;
+	struct ts_session *ts_sess __maybe_unused = NULL;
 	void *param_va[TEE_NUM_PARAMS] = { NULL };
 
 	/* Map user space memory */
@@ -141,7 +141,7 @@ static TEE_Result user_ta_enter(TEE_ErrorOrigin *err,
 		goto cleanup_return;
 
 	/* Switch to user ctx */
-	tee_ta_push_current_session(session);
+	ts_push_current_session(&session->ts_sess);
 
 	/* Make room for usr_params at top of stack */
 	usr_stack = utc->stack_ptr;
@@ -179,8 +179,8 @@ static TEE_Result user_ta_enter(TEE_ErrorOrigin *err,
 	 */
 	tee_mmu_clean_param(&utc->uctx);
 
-	s = tee_ta_pop_current_session();
-	assert(s == session);
+	ts_sess = ts_pop_current_session();
+	assert(ts_sess == &session->ts_sess);
 cleanup_return:
 
 	/*
@@ -202,7 +202,7 @@ cleanup_return:
 static TEE_Result init_with_ldelf(struct tee_ta_session *sess,
 				  struct user_ta_ctx *utc)
 {
-	struct tee_ta_session *s __maybe_unused = NULL;
+	struct ts_session *ts_sess __maybe_unused = NULL;
 	TEE_Result res = TEE_SUCCESS;
 	struct ldelf_arg *arg = NULL;
 	uint32_t panic_code = 0;
@@ -210,7 +210,7 @@ static TEE_Result init_with_ldelf(struct tee_ta_session *sess,
 	uaddr_t usr_stack = 0;
 
 	/* Switch to user ctx */
-	tee_ta_push_current_session(sess);
+	ts_push_current_session(&sess->ts_sess);
 
 	usr_stack = utc->ldelf_stack_ptr;
 	usr_stack -= ROUNDUP(sizeof(*arg), STACK_ALIGNMENT);
@@ -261,8 +261,8 @@ static TEE_Result init_with_ldelf(struct tee_ta_session *sess,
 	utc->dl_entry_func = arg->dl_entry;
 
 out:
-	s = tee_ta_pop_current_session();
-	assert(s == sess);
+	ts_sess = ts_pop_current_session();
+	assert(ts_sess == &sess->ts_sess);
 
 	return res;
 }
@@ -270,7 +270,7 @@ out:
 static TEE_Result user_ta_enter_open_session(struct tee_ta_session *s,
 			struct tee_ta_param *param, TEE_ErrorOrigin *eo)
 {
-	struct user_ta_ctx *utc = to_user_ta_ctx(s->ctx);
+	struct user_ta_ctx *utc = to_user_ta_ctx(s->ts_sess.ctx);
 
 	if (utc->is_initializing) {
 		TEE_Result res = init_with_ldelf(s, utc);
@@ -295,7 +295,7 @@ static TEE_Result user_ta_enter_invoke_cmd(struct tee_ta_session *s,
 static void user_ta_enter_close_session(struct tee_ta_session *s)
 {
 	/* Only if the TA was fully initialized by ldelf */
-	if (!to_user_ta_ctx(s->ctx)->is_initializing) {
+	if (!to_user_ta_ctx(s->ts_sess.ctx)->is_initializing) {
 		TEE_ErrorOrigin eo = TEE_ORIGIN_TEE;
 		struct tee_ta_param param = { };
 
@@ -735,10 +735,10 @@ TEE_Result tee_ta_init_user_ta_session(const TEE_UUID *uuid,
 	if (res)
 		goto err;
 
-	s->ctx = &utc->uctx.ctx;
-	tee_ta_push_current_session(s);
+	s->ts_sess.ctx = &utc->uctx.ctx;
+	ts_push_current_session(&s->ts_sess);
 	res = load_ldelf(utc);
-	tee_ta_pop_current_session();
+	ts_pop_current_session();
 	if (res)
 		goto err;
 
@@ -750,7 +750,7 @@ TEE_Result tee_ta_init_user_ta_session(const TEE_UUID *uuid,
 	return TEE_SUCCESS;
 
 err:
-	s->ctx = NULL;
+	s->ts_sess.ctx = NULL;
 	tee_mmu_set_ctx(NULL);
 	pgt_flush_ctx(&utc->uctx.ctx);
 	free_utc(utc);

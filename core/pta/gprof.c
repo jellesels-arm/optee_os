@@ -49,8 +49,7 @@ exit:
 	return res;
 }
 
-static TEE_Result gprof_send(struct tee_ta_session *s,
-			     uint32_t param_types,
+static TEE_Result gprof_send(struct ts_session *s, uint32_t param_types,
 			     TEE_Param params[TEE_NUM_PARAMS])
 {
 	uint32_t exp_pt = TEE_PARAM_TYPES(TEE_PARAM_TYPE_VALUE_INOUT,
@@ -65,7 +64,7 @@ static TEE_Result gprof_send(struct tee_ta_session *s,
 			      params[1].memref.size, &params[0].value.a);
 }
 
-static TEE_Result gprof_start_pc_sampling(struct tee_ta_session *s,
+static TEE_Result gprof_start_pc_sampling(struct ts_session *s,
 					  uint32_t param_types,
 					  TEE_Param params[TEE_NUM_PARAMS])
 {
@@ -73,16 +72,17 @@ static TEE_Result gprof_start_pc_sampling(struct tee_ta_session *s,
 					  TEE_PARAM_TYPE_VALUE_INPUT,
 					  TEE_PARAM_TYPE_NONE,
 					  TEE_PARAM_TYPE_NONE);
-	struct sample_buf *sbuf;
-	uint32_t offset;
-	uint32_t scale;
-	uint32_t len;
-	uaddr_t buf;
+	struct tee_ta_session *ta_sess = to_ta_session(s);
+	struct sample_buf *sbuf = NULL;
+	uint32_t offset = 0;
+	uint32_t scale = 0;
+	uint32_t len = 0;
+	uaddr_t buf = 0;
 
 	if (exp_pt != param_types)
 		return TEE_ERROR_BAD_PARAMETERS;
 
-	if (s->sbuf) {
+	if (ta_sess->sbuf) {
 		DMSG("PC sampling already started");
 		return TEE_ERROR_BAD_STATE;
 	}
@@ -102,12 +102,12 @@ static TEE_Result gprof_start_pc_sampling(struct tee_ta_session *s,
 	sbuf->scale = scale;
 	sbuf->freq = read_cntfrq();
 	sbuf->enabled = true;
-	s->sbuf = sbuf;
+	ta_sess->sbuf = sbuf;
 
 	return TEE_SUCCESS;
 }
 
-static TEE_Result gprof_stop_pc_sampling(struct tee_ta_session *s,
+static TEE_Result gprof_stop_pc_sampling(struct ts_session *s,
 					 uint32_t param_types,
 					 TEE_Param params[TEE_NUM_PARAMS])
 {
@@ -115,13 +115,14 @@ static TEE_Result gprof_stop_pc_sampling(struct tee_ta_session *s,
 					  TEE_PARAM_TYPE_NONE,
 					  TEE_PARAM_TYPE_NONE,
 					  TEE_PARAM_TYPE_NONE);
-	struct sample_buf *sbuf;
-	uint32_t rate;
+	struct tee_ta_session *ta_sess = to_ta_session(s);
+	struct sample_buf *sbuf = NULL;
+	uint32_t rate = 0;
 
 	if (exp_pt != param_types)
 		return TEE_ERROR_BAD_PARAMETERS;
 
-	sbuf = s->sbuf;
+	sbuf = ta_sess->sbuf;
 	if (!sbuf)
 		return TEE_ERROR_BAD_STATE;
 	assert(sbuf->samples);
@@ -138,7 +139,7 @@ static TEE_Result gprof_stop_pc_sampling(struct tee_ta_session *s,
 	     sbuf->freq, rate);
 
 	free(sbuf);
-	s->sbuf = NULL;
+	ta_sess->sbuf = NULL;
 
 	return TEE_SUCCESS;
 }
@@ -151,10 +152,9 @@ static TEE_Result open_session(uint32_t param_types __unused,
 			       TEE_Param params[TEE_NUM_PARAMS] __unused,
 			       void **sess_ctx __unused)
 {
-	struct tee_ta_session *s;
+	struct ts_session *s = ts_get_calling_session();
 
 	/* Check that we're called from a user TA */
-	s = tee_ta_get_calling_session();
 	if (!s)
 		return TEE_ERROR_ACCESS_DENIED;
 	if (!is_user_ta_ctx(s->ctx))
@@ -167,7 +167,7 @@ static TEE_Result invoke_command(void *sess_ctx __unused, uint32_t cmd_id,
 				 uint32_t param_types,
 				 TEE_Param params[TEE_NUM_PARAMS])
 {
-	struct tee_ta_session *s = tee_ta_get_calling_session();
+	struct ts_session *s = ts_get_calling_session();
 
 	switch (cmd_id) {
 	case PTA_GPROF_SEND:

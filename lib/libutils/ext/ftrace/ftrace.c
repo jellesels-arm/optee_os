@@ -44,9 +44,9 @@ static __noprof struct ftrace_buf *get_fbuf(void)
 		return NULL;
 
 	tsd = thread_get_tsd();
-	s = TAILQ_FIRST(&tsd->sess_stack);
+	s = to_ta_session(TAILQ_FIRST(&tsd->sess_stack));
 
-	if (!s || tsd->ctx != s->ctx)
+	if (!s || tsd->ctx != s->ts_sess.ctx)
 		return NULL;
 
 	if (s->fbuf && s->fbuf->syscall_trace_enabled &&
