@@ -123,14 +123,14 @@ static void clear_vfp_state(struct user_ta_ctx *utc __unused)
 }
 
 static TEE_Result user_ta_enter(TEE_ErrorOrigin *err,
-			struct tee_ta_session *session,
-			enum utee_entry_func func, uint32_t cmd,
-			struct tee_ta_param *param)
+				struct ts_session *session,
+				enum utee_entry_func func, uint32_t cmd,
+				struct tee_ta_param *param)
 {
 	TEE_Result res = TEE_SUCCESS;
 	struct utee_params *usr_params = NULL;
 	uaddr_t usr_stack = 0;
-	struct user_ta_ctx *utc = to_user_ta_ctx(session->ts_sess.ctx);
+	struct user_ta_ctx *utc = to_user_ta_ctx(session->ctx);
 	TEE_ErrorOrigin serr = TEE_ORIGIN_TEE;
 	struct ts_session *ts_sess __maybe_unused = NULL;
 	void *param_va[TEE_NUM_PARAMS] = { NULL };
@@ -141,7 +141,7 @@ static TEE_Result user_ta_enter(TEE_ErrorOrigin *err,
 		goto cleanup_return;
 
 	/* Switch to user ctx */
-	ts_push_current_session(&session->ts_sess);
+	ts_push_current_session(session);
 
 	/* Make room for usr_params at top of stack */
 	usr_stack = utc->stack_ptr;
@@ -180,7 +180,7 @@ static TEE_Result user_ta_enter(TEE_ErrorOrigin *err,
 	tee_mmu_clean_param(&utc->uctx);
 
 	ts_sess = ts_pop_current_session();
-	assert(ts_sess == &session->ts_sess);
+	assert(ts_sess == session);
 cleanup_return:
 
 	/*
@@ -188,7 +188,7 @@ cleanup_return:
 	 * time the TA will be invoked will be with a new operation and should
 	 * not have an old cancellation pending.
 	 */
-	session->cancel = false;
+	to_ta_session(session)->cancel = false;
 
 	/*
 	 * Can't update *err until now since it may point to an address
@@ -199,7 +199,7 @@ cleanup_return:
 	return res;
 }
 
-static TEE_Result init_with_ldelf(struct tee_ta_session *sess,
+static TEE_Result init_with_ldelf(struct ts_session *sess,
 				  struct user_ta_ctx *utc)
 {
 	struct ts_session *ts_sess __maybe_unused = NULL;
@@ -210,13 +210,13 @@ static TEE_Result init_with_ldelf(struct tee_ta_session *sess,
 	uaddr_t usr_stack = 0;
 
 	/* Switch to user ctx */
-	ts_push_current_session(&sess->ts_sess);
+	ts_push_current_session(sess);
 
 	usr_stack = utc->ldelf_stack_ptr;
 	usr_stack -= ROUNDUP(sizeof(*arg), STACK_ALIGNMENT);
 	arg = (struct ldelf_arg *)usr_stack;
 	memset(arg, 0, sizeof(*arg));
-	arg->uuid = utc->uctx.ctx.uuid;
+	arg->uuid = utc->uctx.ctx.ts_ctx.uuid;
 
 	res = thread_enter_user_mode((vaddr_t)arg, 0, 0, 0,
 				     usr_stack, utc->entry_func,
@@ -256,21 +256,22 @@ static TEE_Result init_with_ldelf(struct tee_ta_session *sess,
 	utc->dump_entry_func = arg->dump_entry;
 #ifdef CFG_FTRACE_SUPPORT
 	utc->ftrace_entry_func = arg->ftrace_entry;
-	sess->fbuf = arg->fbuf;
+	to_ta_session(sess)->fbuf = arg->fbuf;
 #endif
 	utc->dl_entry_func = arg->dl_entry;
 
 out:
 	ts_sess = ts_pop_current_session();
-	assert(ts_sess == &sess->ts_sess);
+	assert(ts_sess == sess);
 
 	return res;
 }
 
-static TEE_Result user_ta_enter_open_session(struct tee_ta_session *s,
-			struct tee_ta_param *param, TEE_ErrorOrigin *eo)
+static TEE_Result user_ta_enter_open_session(struct ts_session *s,
+					     struct tee_ta_param *param,
+					     TEE_ErrorOrigin *eo)
 {
-	struct user_ta_ctx *utc = to_user_ta_ctx(s->ts_sess.ctx);
+	struct user_ta_ctx *utc = to_user_ta_ctx(s->ctx);
 
 	if (utc->is_initializing) {
 		TEE_Result res = init_with_ldelf(s, utc);
@@ -285,17 +286,17 @@ static TEE_Result user_ta_enter_open_session(struct tee_ta_session *s,
 	return user_ta_enter(eo, s, UTEE_ENTRY_FUNC_OPEN_SESSION, 0, param);
 }
 
-static TEE_Result user_ta_enter_invoke_cmd(struct tee_ta_session *s,
-			uint32_t cmd, struct tee_ta_param *param,
-			TEE_ErrorOrigin *eo)
+static TEE_Result user_ta_enter_invoke_cmd(struct ts_session *s, uint32_t cmd,
+					   struct tee_ta_param *param,
+					   TEE_ErrorOrigin *eo)
 {
 	return user_ta_enter(eo, s, UTEE_ENTRY_FUNC_INVOKE_COMMAND, cmd, param);
 }
 
-static void user_ta_enter_close_session(struct tee_ta_session *s)
+static void user_ta_enter_close_session(struct ts_session *s)
 {
 	/* Only if the TA was fully initialized by ldelf */
-	if (!to_user_ta_ctx(s->ts_sess.ctx)->is_initializing) {
+	if (!to_user_ta_ctx(s->ctx)->is_initializing) {
 		TEE_ErrorOrigin eo = TEE_ORIGIN_TEE;
 		struct tee_ta_param param = { };
 
@@ -421,7 +422,7 @@ static TEE_Result dump_state_ldelf_dbg(struct user_ta_ctx *utc)
 	return res;
 }
 
-static void user_ta_dump_state(struct tee_ta_ctx *ctx)
+static void user_ta_dump_state(struct ts_ctx *ctx)
 {
 	struct user_ta_ctx *utc = to_user_ta_ctx(ctx);
 
@@ -488,7 +489,7 @@ static TEE_Result dump_ftrace(struct user_ta_ctx *utc, void *buf, size_t *blen)
 	return res;
 }
 
-static void user_ta_dump_ftrace(struct tee_ta_ctx *ctx)
+static void user_ta_dump_ftrace(struct ts_ctx *ctx)
 {
 	uint32_t prot = TEE_MATTR_URW;
 	struct user_ta_ctx *utc = to_user_ta_ctx(ctx);
@@ -581,12 +582,12 @@ static void free_utc(struct user_ta_ctx *utc)
 	free(utc);
 }
 
-static void user_ta_ctx_destroy(struct tee_ta_ctx *ctx)
+static void user_ta_ctx_destroy(struct ts_ctx *ctx)
 {
 	free_utc(to_user_ta_ctx(ctx));
 }
 
-static uint32_t user_ta_get_instance_id(struct tee_ta_ctx *ctx)
+static uint32_t user_ta_get_instance_id(struct ts_ctx *ctx)
 {
 	return to_user_ta_ctx(ctx)->uctx.vm_info.asid;
 }
@@ -620,10 +621,10 @@ service_init(init_user_ta);
 
 static void set_ta_ctx_ops(struct tee_ta_ctx *ctx)
 {
-	ctx->ops = _user_ta_ops;
+	ctx->ts_ctx.ops = _user_ta_ops;
 }
 
-bool is_user_ta_ctx(struct tee_ta_ctx *ctx)
+bool is_user_ta_ctx(struct ts_ctx *ctx)
 {
 	return ctx && ctx->ops == _user_ta_ops;
 }
@@ -690,7 +691,7 @@ static TEE_Result load_ldelf(struct user_ta_ctx *utc)
 	if (res)
 		return res;
 
-	tee_mmu_set_ctx(&utc->uctx.ctx);
+	tee_mmu_set_ctx(&utc->uctx.ctx.ts_ctx);
 
 	memcpy((void *)code_addr, ldelf_data, ldelf_code_size);
 	memcpy((void *)rw_addr, ldelf_data + ldelf_code_size, ldelf_data_size);
@@ -730,12 +731,12 @@ TEE_Result tee_ta_init_user_ta_session(const TEE_UUID *uuid,
 	 */
 	set_ta_ctx_ops(&utc->uctx.ctx);
 
-	utc->uctx.ctx.uuid = *uuid;
+	utc->uctx.ctx.ts_ctx.uuid = *uuid;
 	res = vm_info_init(&utc->uctx);
 	if (res)
 		goto err;
 
-	s->ts_sess.ctx = &utc->uctx.ctx;
+	s->ts_sess.ctx = &utc->uctx.ctx.ts_ctx;
 	ts_push_current_session(&s->ts_sess);
 	res = load_ldelf(utc);
 	ts_pop_current_session();
@@ -752,7 +753,7 @@ TEE_Result tee_ta_init_user_ta_session(const TEE_UUID *uuid,
 err:
 	s->ts_sess.ctx = NULL;
 	tee_mmu_set_ctx(NULL);
-	pgt_flush_ctx(&utc->uctx.ctx);
+	pgt_flush_ctx(&utc->uctx.ctx.ts_ctx);
 	free_utc(utc);
 	return res;
 }
