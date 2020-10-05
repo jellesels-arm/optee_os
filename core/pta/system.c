@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: BSD-2-Clause
 /*
  * Copyright (c) 2018-2019, Linaro Limited
+ * Copyright (c) 2020, Arm Limited.
  */
 
 #include <assert.h>
@@ -12,7 +13,7 @@
 #include <kernel/pseudo_ta.h>
 #include <kernel/tpm.h>
 #include <kernel/user_ta.h>
-#include <kernel/user_ta_store.h>
+#include <kernel/ts_store.h>
 #include <ldelf.h>
 #include <mm/file.h>
 #include <mm/fobj.h>
@@ -26,8 +27,8 @@
 #include <util.h>
 
 struct bin_handle {
-	const struct user_ta_store_ops *op;
-	struct user_ta_store_handle *h;
+	const struct ts_store_ops *op;
+	struct ts_store_handle *h;
 	struct file *f;
 	size_t offs_bytes;
 	size_t size_bytes;
@@ -35,7 +36,7 @@ struct bin_handle {
 
 struct system_ctx {
 	struct handle_db db;
-	const struct user_ta_store_ops *store_op;
+	const struct ts_store_ops *store_op;
 };
 
 static unsigned int system_pnum;
@@ -226,7 +227,7 @@ static void ta_bin_close(void *ptr)
 	free(binh);
 }
 
-static TEE_Result system_open_ta_binary(struct system_ctx *ctx,
+static TEE_Result system_open_ts_binary(struct system_ctx *ctx,
 					uint32_t param_types,
 					TEE_Param params[TEE_NUM_PARAMS])
 {
@@ -252,8 +253,8 @@ static TEE_Result system_open_ta_binary(struct system_ctx *ctx,
 	if (!binh)
 		return TEE_ERROR_OUT_OF_MEMORY;
 
-	SCATTERED_ARRAY_FOREACH(binh->op, ta_stores, struct user_ta_store_ops) {
-		DMSG("Lookup user TA ELF %pUl (%s)",
+	SCATTERED_ARRAY_FOREACH(binh->op, ts_stores, struct ts_store_ops) {
+		DMSG("Lookup user TS ELF %pUl (%s)",
 		     (void *)uuid, binh->op->description);
 
 		res = binh->op->open(uuid, &binh->h);
@@ -887,7 +888,7 @@ static TEE_Result invoke_command(void *sess_ctx, uint32_t cmd_id,
 	case PTA_SYSTEM_UNMAP:
 		return system_unmap(s, param_types, params);
 	case PTA_SYSTEM_OPEN_TA_BINARY:
-		return system_open_ta_binary(sess_ctx, param_types, params);
+		return system_open_ts_binary(sess_ctx, param_types, params);
 	case PTA_SYSTEM_CLOSE_TA_BINARY:
 		return system_close_ta_binary(sess_ctx, param_types, params);
 	case PTA_SYSTEM_MAP_TA_BINARY:
