@@ -61,6 +61,21 @@ def ta_get_flags(ta_f):
 
 def main():
     args = get_args()
+    is_sp = False
+
+    if args.ta is None and args.sp is None:
+        raise Exception('The --ta or the --sp flag is required')
+
+    if args.ta is not None and args.sp is not None:
+        raise Exception('The --ta and --sp can\'t be combined')
+
+    if args.ta is not None:
+        ts = args.ta
+        is_sp = False
+
+    if args.sp is not None:
+        ts = args.sp
+        is_sp = True
 
     ta_uuid = uuid.UUID(re.sub(r'\..*', '', os.path.basename(args.ta)))
 
