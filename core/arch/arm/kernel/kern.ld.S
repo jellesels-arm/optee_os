@@ -134,7 +134,12 @@ SECTIONS
 		KEEP(*(.rodata.early_ta))
 		__rodata_early_ta_end = .;
 #endif
-
+#ifdef CFG_EMBEDDED_SP
+		. = ALIGN(8);
+		__rodata_embedded_sp_start = .;
+		KEEP(*(.rodata.embedded_sp))
+		__rodata_embedded_sp_end = .;
+#endif
 		*(.rodata .rodata.*)
 		. = ALIGN(8);
 		KEEP(*(SORT(.scattered_array*)));
@@ -351,6 +356,12 @@ SECTIONS
 		__rodata_early_ta_start = .;
 		KEEP(*(.rodata.early_ta))
 		__rodata_early_ta_end = .;
+#endif
+#ifdef CFG_EMBEDDED_SP
+		. = ALIGN(8);
+		__rodata_embedded_sp_start = .;
+		KEEP(*(.rodata.embedded_sp))
+		__rodata_embedded_sp_end = .;
 #endif
 		*(.rodata*)
 	}
