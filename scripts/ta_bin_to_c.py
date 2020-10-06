@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: BSD-2-Clause
 #
 # Copyright (c) 2017, Linaro Limited
+# Copyright (c) 2020, Arm Limited.
 #
 
 import argparse
@@ -76,9 +77,9 @@ def main():
             os.path.basename(__file__) + ' */\n\n')
     f.write('#include <compiler.h>\n')
     f.write('#include <kernel/early_ta.h>\n\n')
-    f.write('__extension__ const struct early_ta __early_ta_' +
+    f.write('__extension__ const struct embedded_ts __early_ta_' +
             ta_uuid.hex +
-            '\n__early_ta __aligned(__alignof__(struct early_ta)) = {\n')
+            '\n__early_ta __aligned(__alignof__(struct embedded_ts)) = {\n')
     f.write('\t.flags = 0x{:04x},\n'.format(ta_get_flags(args.ta)))
     f.write('\t.uuid = {\n')
     f.write('\t\t.timeLow = 0x{:08x},\n'.format(ta_uuid.time_low))
@@ -95,7 +96,7 @@ def main():
     if args.compress:
         f.write('\t.uncompressed_size = '
                 '{:d},\n'.format(uncompressed_size))
-    f.write('\t.ta = {\n')
+    f.write('\t.ts = {\n')
     i = 0
     while i < size:
         if i % 8 == 0:
