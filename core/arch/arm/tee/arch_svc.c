@@ -391,7 +391,7 @@ static void save_panic_stack(struct thread_svc_regs *regs __unused)
 {
 	struct thread_specific_data *tsd = thread_get_tsd();
 
-	tsd->abort_type = ABORT_TYPE_TA_PANIC;
+	tsd->abort_type = ABORT_TYPE_USER_MODE_PANIC;
 }
 #endif /* CFG_UNWIND */
 #endif /*ARM64*/
