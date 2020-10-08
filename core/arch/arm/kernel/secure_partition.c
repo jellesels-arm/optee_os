@@ -51,8 +51,8 @@ static struct sec_part_ctx *sec_part_alloc_ctx(const TEE_UUID *uuid)
 	if (!spc)
 		return NULL;
 
-	spc->uctx.ctx.ops = &secure_partition_ops;
-	spc->uctx.ctx.uuid = *uuid;
+	spc->uctx.ctx.ts_ctx.ops = &secure_partition_ops;
+	spc->uctx.ctx.ts_ctx.uuid = *uuid;
 	spc->uctx.ctx.flags = TA_FLAG_SINGLE_INSTANCE |
 			      TA_FLAG_INSTANCE_KEEP_ALIVE;
 
@@ -199,7 +199,7 @@ static TEE_Result load_stmm(struct sec_part_ctx *spc)
 	stack_addr = heap_addr + stmm_heap_size;
 	sec_buf_addr = stack_addr + stmm_stack_size;
 
-	tee_mmu_set_ctx(&spc->uctx.ctx);
+	tee_mmu_set_ctx(&spc->uctx.ctx.ts_ctx);
 	uncompress_image((void *)image_addr, stmm_image_uncompressed_size,
 			 stmm_image, stmm_image_size);
 
@@ -276,14 +276,14 @@ TEE_Result sec_part_init_session(const TEE_UUID *uuid,
 
 	spc->is_initializing = true;
 
-	sess->ts_sess.ctx = &spc->uctx.ctx;
+	sess->ts_sess.ctx = &spc->uctx.ctx.ts_ctx;
 	ts_push_current_session(&sess->ts_sess);
 	res = load_stmm(spc);
 	ts_pop_current_session();
 	tee_mmu_set_ctx(NULL);
 	if (res) {
 		sess->ts_sess.ctx = NULL;
-		spc->uctx.ctx.ops->destroy(&spc->uctx.ctx);
+		spc->uctx.ctx.ts_ctx.ops->destroy(&spc->uctx.ctx.ts_ctx);
 
 		return res;
 	}
@@ -294,11 +294,11 @@ TEE_Result sec_part_init_session(const TEE_UUID *uuid,
 	return TEE_SUCCESS;
 }
 
-static TEE_Result stmm_enter_open_session(struct tee_ta_session *s,
+static TEE_Result stmm_enter_open_session(struct ts_session *s,
 					  struct tee_ta_param *param,
 					  TEE_ErrorOrigin *eo)
 {
-	struct sec_part_ctx *spc = to_sec_part_ctx(s->ts_sess.ctx);
+	struct sec_part_ctx *spc = to_sec_part_ctx(s->ctx);
 	const uint32_t exp_pt = TEE_PARAM_TYPES(TEE_PARAM_TYPE_NONE,
 						TEE_PARAM_TYPE_NONE,
 						TEE_PARAM_TYPE_NONE,
@@ -316,12 +316,11 @@ static TEE_Result stmm_enter_open_session(struct tee_ta_session *s,
 	return TEE_SUCCESS;
 }
 
-static TEE_Result stmm_enter_invoke_cmd(struct tee_ta_session *s,
-					uint32_t cmd,
+static TEE_Result stmm_enter_invoke_cmd(struct ts_session *s, uint32_t cmd,
 					struct tee_ta_param *param,
 					TEE_ErrorOrigin *eo __unused)
 {
-	struct sec_part_ctx *spc = to_sec_part_ctx(s->ts_sess.ctx);
+	struct sec_part_ctx *spc = to_sec_part_ctx(s->ctx);
 	TEE_Result res = TEE_SUCCESS;
 	TEE_Result __maybe_unused tmp_res = TEE_SUCCESS;
 	unsigned int ns_buf_size = 0;
@@ -365,7 +364,7 @@ static TEE_Result stmm_enter_invoke_cmd(struct tee_ta_session *s,
 	spc->regs.x[6] = 0;
 	spc->regs.x[7] = 0;
 
-	ts_push_current_session(&s->ts_sess);
+	ts_push_current_session(s);
 
 	memcpy((void *)spc->ns_comm_buf_addr, va, ns_buf_size);
 
@@ -389,21 +388,21 @@ out_va:
 	return res;
 }
 
-static void stmm_enter_close_session(struct tee_ta_session *s __unused)
+static void stmm_enter_close_session(struct ts_session *s __unused)
 {
 }
 
-static void sec_part_dump_state(struct tee_ta_ctx *ctx)
+static void sec_part_dump_state(struct ts_ctx *ctx)
 {
 	user_mode_ctx_print_mappings(to_user_mode_ctx(ctx));
 }
 
-static uint32_t sec_part_get_instance_id(struct tee_ta_ctx *ctx)
+static uint32_t sec_part_get_instance_id(struct ts_ctx *ctx)
 {
 	return to_sec_part_ctx(ctx)->uctx.vm_info.asid;
 }
 
-static void sec_part_ctx_destroy(struct tee_ta_ctx *ctx)
+static void sec_part_ctx_destroy(struct ts_ctx *ctx)
 {
 	struct sec_part_ctx *spc = to_sec_part_ctx(ctx);
 
