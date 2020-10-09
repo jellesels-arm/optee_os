@@ -92,12 +92,6 @@ struct tee_ta_session {
 	struct condvar lock_cv;	/* CV used to wait for lock */
 	short int lock_thread;	/* Id of thread holding the lock */
 	bool unlink;		/* True if session is to be unlinked */
-#if defined(CFG_TA_GPROF_SUPPORT)
-	struct sample_buf *sbuf; /* Profiling data (PC sampling) */
-#endif
-#if defined(CFG_FTRACE_SUPPORT)
-	struct ftrace_buf *fbuf; /* ftrace buffer */
-#endif
 };
 
 /* Registered contexts */

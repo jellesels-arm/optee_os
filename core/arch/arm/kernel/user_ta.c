@@ -257,7 +257,7 @@ static TEE_Result init_with_ldelf(struct ts_session *sess,
 	utc->dump_entry_func = arg->dump_entry;
 #ifdef CFG_FTRACE_SUPPORT
 	utc->ftrace_entry_func = arg->ftrace_entry;
-	to_ta_session(sess)->fbuf = arg->fbuf;
+	sess->fbuf = arg->fbuf;
 #endif
 	utc->dl_entry_func = arg->dl_entry;
 

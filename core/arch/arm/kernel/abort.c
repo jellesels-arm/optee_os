@@ -251,7 +251,7 @@ void abort_print_current_ta(void)
 
 #if defined(CFG_FTRACE_SUPPORT)
 	if (s->ctx->ops->dump_ftrace) {
-		to_ta_session(s)->fbuf = NULL;
+		s->fbuf = NULL;
 		s->ctx->ops->dump_ftrace(s->ctx);
 	}
 #endif

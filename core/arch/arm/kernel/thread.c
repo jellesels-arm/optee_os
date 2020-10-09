@@ -612,23 +612,17 @@ static bool is_from_user(uint32_t cpsr)
 static void __noprof ftrace_suspend(void)
 {
 	struct ts_session *s = TAILQ_FIRST(&thread_get_tsd()->sess_stack);
-	struct ftrace_buf *fbuf = NULL;
 
-	if (s)
-		fbuf = to_ta_session(s)->fbuf;
-	if (fbuf)
-		fbuf->syscall_trace_suspended = true;
+	if (s && s->fbuf)
+		s->fbuf->syscall_trace_suspended = true;
 }
 
 static void __noprof ftrace_resume(void)
 {
 	struct ts_session *s = TAILQ_FIRST(&thread_get_tsd()->sess_stack);
-	struct ftrace_buf *fbuf = NULL;
 
-	if (s)
-		fbuf = to_ta_session(s)->fbuf;
-	if (fbuf)
-		fbuf->syscall_trace_suspended = false;
+	if (s && s->fbuf)
+		s->fbuf->syscall_trace_suspended = false;
 }
 #else
 static void __noprof ftrace_suspend(void)

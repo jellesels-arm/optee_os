@@ -18,6 +18,12 @@ struct ts_ctx {
 struct ts_session {
 	TAILQ_ENTRY(ts_session) link_tsd;
 	struct ts_ctx *ctx;	/* Generic TS context */
+#if defined(CFG_TA_GPROF_SUPPORT)
+	struct sample_buf *sbuf; /* Profiling data (PC sampling) */
+#endif
+#if defined(CFG_FTRACE_SUPPORT)
+	struct ftrace_buf *fbuf; /* ftrace buffer */
+#endif
 };
 
 enum ts_gprof_status {

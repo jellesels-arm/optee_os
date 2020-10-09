@@ -72,7 +72,6 @@ static TEE_Result gprof_start_pc_sampling(struct ts_session *s,
 					  TEE_PARAM_TYPE_VALUE_INPUT,
 					  TEE_PARAM_TYPE_NONE,
 					  TEE_PARAM_TYPE_NONE);
-	struct tee_ta_session *ta_sess = to_ta_session(s);
 	struct sample_buf *sbuf = NULL;
 	uint32_t offset = 0;
 	uint32_t scale = 0;
@@ -82,7 +81,7 @@ static TEE_Result gprof_start_pc_sampling(struct ts_session *s,
 	if (exp_pt != param_types)
 		return TEE_ERROR_BAD_PARAMETERS;
 
-	if (ta_sess->sbuf) {
+	if (s->sbuf) {
 		DMSG("PC sampling already started");
 		return TEE_ERROR_BAD_STATE;
 	}
@@ -102,7 +101,7 @@ static TEE_Result gprof_start_pc_sampling(struct ts_session *s,
 	sbuf->scale = scale;
 	sbuf->freq = read_cntfrq();
 	sbuf->enabled = true;
-	ta_sess->sbuf = sbuf;
+	s->sbuf = sbuf;
 
 	return TEE_SUCCESS;
 }
@@ -115,14 +114,13 @@ static TEE_Result gprof_stop_pc_sampling(struct ts_session *s,
 					  TEE_PARAM_TYPE_NONE,
 					  TEE_PARAM_TYPE_NONE,
 					  TEE_PARAM_TYPE_NONE);
-	struct tee_ta_session *ta_sess = to_ta_session(s);
 	struct sample_buf *sbuf = NULL;
 	uint32_t rate = 0;
 
 	if (exp_pt != param_types)
 		return TEE_ERROR_BAD_PARAMETERS;
 
-	sbuf = ta_sess->sbuf;
+	sbuf = s->sbuf;
 	if (!sbuf)
 		return TEE_ERROR_BAD_STATE;
 	assert(sbuf->samples);
@@ -139,7 +137,7 @@ static TEE_Result gprof_stop_pc_sampling(struct ts_session *s,
 	     sbuf->freq, rate);
 
 	free(sbuf);
-	ta_sess->sbuf = NULL;
+	s->sbuf = NULL;
 
 	return TEE_SUCCESS;
 }

@@ -281,7 +281,7 @@ static void destroy_session(struct tee_ta_session *s,
 #if defined(CFG_FTRACE_SUPPORT)
 	if (s->ts_sess.ctx && s->ts_sess.ctx->ops->dump_ftrace) {
 		ts_push_current_session(&s->ts_sess);
-		s->fbuf = NULL;
+		s->ts_sess.fbuf = NULL;
 		s->ts_sess.ctx->ops->dump_ftrace(s->ts_sess.ctx);
 		ts_pop_current_session();
 	}
@@ -289,7 +289,7 @@ static void destroy_session(struct tee_ta_session *s,
 
 	tee_ta_unlink_session(s, open_sessions);
 #if defined(CFG_TA_GPROF_SUPPORT)
-	free(s->sbuf);
+	free(s->ts_sess.sbuf);
 #endif
 	free(s);
 }
@@ -847,7 +847,7 @@ void tee_ta_gprof_sample_pc(vaddr_t pc)
 	TEE_Result res = 0;
 	size_t idx = 0;
 
-	sbuf = to_ta_session(s)->sbuf;
+	sbuf = s->sbuf;
 	if (!sbuf || !sbuf->enabled)
 		return; /* PC sampling is not enabled */
 
@@ -870,9 +870,8 @@ void tee_ta_gprof_sample_pc(vaddr_t pc)
 static void gprof_update_session_utime(bool suspend, struct ts_session *s,
 				       uint64_t now)
 {
-	struct sample_buf *sbuf = NULL;
+	struct sample_buf *sbuf = s->sbuf;
 
-	sbuf = to_ta_session(s)->sbuf;
 	if (!sbuf)
 		return;
 
@@ -922,7 +921,7 @@ static void ftrace_update_times(bool suspend)
 
 	now = read_cntpct();
 
-	fbuf = to_ta_session(s)->fbuf;
+	fbuf = s->fbuf;
 	if (!fbuf)
 		return;
 

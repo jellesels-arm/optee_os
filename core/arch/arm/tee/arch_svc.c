@@ -137,7 +137,6 @@ static void trace_syscall(size_t num __unused)
 static void __noprof ftrace_syscall_enter(size_t num)
 {
 	struct ts_session *s = NULL;
-	struct ftrace_buf *fbuf = NULL;
 
 	/*
 	 * Syscalls related to inter-TA communication can't be traced in the
@@ -150,21 +149,16 @@ static void __noprof ftrace_syscall_enter(size_t num)
 		return;
 
 	s = TAILQ_FIRST(&thread_get_tsd()->sess_stack);
-	if (s)
-		fbuf = to_ta_session(s)->fbuf;
-	if (fbuf)
-		fbuf->syscall_trace_enabled = true;
+	if (s && s->fbuf)
+		s->fbuf->syscall_trace_enabled = true;
 }
 
 static void __noprof ftrace_syscall_leave(void)
 {
 	struct ts_session *s = TAILQ_FIRST(&thread_get_tsd()->sess_stack);
-	struct ftrace_buf *fbuf = NULL;
 
-	if (s)
-		fbuf = to_ta_session(s)->fbuf;
-	if (fbuf)
-		fbuf->syscall_trace_enabled = false;
+	if (s && s->fbuf)
+		s->fbuf->syscall_trace_enabled = false;
 }
 #else
 static void __noprof ftrace_syscall_enter(size_t num __unused)
