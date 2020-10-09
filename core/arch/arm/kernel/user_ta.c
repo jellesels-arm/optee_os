@@ -156,15 +156,15 @@ static TEE_Result user_ta_enter(struct ts_session *session,
 	res = thread_enter_user_mode(func, kaddr_to_uref(session),
 				     (vaddr_t)usr_params, cmd, usr_stack,
 				     utc->entry_func, utc->is_32bit,
-				     &utc->uctx.ctx.panicked,
-				     &utc->uctx.ctx.panic_code);
+				     &utc->ta_ctx.panicked,
+				     &utc->ta_ctx.panic_code);
 
 	clear_vfp_state(utc);
 
-	if (utc->uctx.ctx.panicked) {
+	if (utc->ta_ctx.panicked) {
 		abort_print_current_ta();
 		DMSG("tee_user_ta_enter: TA panicked with code 0x%x",
-		     utc->uctx.ctx.panic_code);
+		     utc->ta_ctx.panic_code);
 		res = TEE_ERROR_TARGET_DEAD;
 	} else {
 		/*
@@ -217,7 +217,7 @@ static TEE_Result init_with_ldelf(struct ts_session *sess,
 	usr_stack -= ROUNDUP(sizeof(*arg), STACK_ALIGNMENT);
 	arg = (struct ldelf_arg *)usr_stack;
 	memset(arg, 0, sizeof(*arg));
-	arg->uuid = utc->uctx.ctx.ts_ctx.uuid;
+	arg->uuid = utc->ta_ctx.ts_ctx.uuid;
 
 	res = thread_enter_user_mode((vaddr_t)arg, 0, 0, 0,
 				     usr_stack, utc->entry_func,
@@ -253,7 +253,7 @@ static TEE_Result init_with_ldelf(struct ts_session *sess,
 	utc->is_32bit = arg->is_32bit;
 	utc->entry_func = arg->entry_func;
 	utc->stack_ptr = arg->stack_ptr;
-	utc->uctx.ctx.flags = arg->flags;
+	utc->ta_ctx.flags = arg->flags;
 	utc->dump_entry_func = arg->dump_entry;
 #ifdef CFG_FTRACE_SUPPORT
 	utc->ftrace_entry_func = arg->ftrace_entry;
@@ -697,7 +697,7 @@ static TEE_Result load_ldelf(struct user_ta_ctx *utc)
 	if (res)
 		return res;
 
-	tee_mmu_set_ctx(&utc->uctx.ctx.ts_ctx);
+	tee_mmu_set_ctx(&utc->ta_ctx.ts_ctx);
 
 	memcpy((void *)code_addr, ldelf_data, ldelf_code_size);
 	memcpy((void *)rw_addr, ldelf_data + ldelf_code_size, ldelf_data_size);
@@ -724,34 +724,36 @@ TEE_Result tee_ta_init_user_ta_session(const TEE_UUID *uuid,
 	if (!utc)
 		return TEE_ERROR_OUT_OF_MEMORY;
 
-	utc->uctx.ctx.initializing = true;
+	utc->ta_ctx.initializing = true;
 	utc->is_initializing = true;
 	TAILQ_INIT(&utc->open_sessions);
 	TAILQ_INIT(&utc->cryp_states);
 	TAILQ_INIT(&utc->objects);
 	TAILQ_INIT(&utc->storage_enums);
 
+	utc->uctx.ts_ctx = &utc->ta_ctx.ts_ctx;
+
 	/*
 	 * Set context TA operation structure. It is required by generic
 	 * implementation to identify userland TA versus pseudo TA contexts.
 	 */
-	set_ta_ctx_ops(&utc->uctx.ctx);
+	set_ta_ctx_ops(&utc->ta_ctx);
 
-	utc->uctx.ctx.ts_ctx.uuid = *uuid;
+	utc->ta_ctx.ts_ctx.uuid = *uuid;
 	res = vm_info_init(&utc->uctx);
 	if (res)
 		goto err;
 
-	s->ts_sess.ctx = &utc->uctx.ctx.ts_ctx;
+	s->ts_sess.ctx = &utc->ta_ctx.ts_ctx;
 	ts_push_current_session(&s->ts_sess);
 	res = load_ldelf(utc);
 	ts_pop_current_session();
 	if (res)
 		goto err;
 
-	utc->uctx.ctx.ref_count = 1;
-	condvar_init(&utc->uctx.ctx.busy_cv);
-	TAILQ_INSERT_TAIL(&tee_ctxes, &utc->uctx.ctx, link);
+	utc->ta_ctx.ref_count = 1;
+	condvar_init(&utc->ta_ctx.busy_cv);
+	TAILQ_INSERT_TAIL(&tee_ctxes, &utc->ta_ctx, link);
 
 	tee_mmu_set_ctx(NULL);
 	return TEE_SUCCESS;
@@ -759,7 +761,7 @@ TEE_Result tee_ta_init_user_ta_session(const TEE_UUID *uuid,
 err:
 	s->ts_sess.ctx = NULL;
 	tee_mmu_set_ctx(NULL);
-	pgt_flush_ctx(&utc->uctx.ctx.ts_ctx);
+	pgt_flush_ctx(&utc->ta_ctx.ts_ctx);
 	free_utc(utc);
 	return res;
 }
